@@ -14,6 +14,8 @@ class SimpleVideoActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_video)
+        Executors.newFixedThreadPool(1).execute(SimpleAudioDecoder(this))
+
         var surfaceView: SurfaceView = findViewById(R.id.surface)
         surfaceView.holder.addCallback(object : SurfaceHolder.Callback2 {
             override fun surfaceRedrawNeeded(p0: SurfaceHolder?) {
@@ -26,9 +28,9 @@ class SimpleVideoActivity : Activity() {
             }
 
             override fun surfaceCreated(p0: SurfaceHolder?) {
-                var surface = p0?.surface
-                Executors.newFixedThreadPool(1)
-                    .execute(SimpleDecoder(this@SimpleVideoActivity, surface!!))
+//                var surface = p0?.surface
+//                Executors.newFixedThreadPool(1)
+//                    .execute(SimpleVideoDecoder(this@SimpleVideoActivity, surface!!))
             }
         })
     }

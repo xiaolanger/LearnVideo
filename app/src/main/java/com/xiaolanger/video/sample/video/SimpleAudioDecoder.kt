@@ -1,20 +1,21 @@
 package com.xiaolanger.video.sample.video
 
 import android.content.Context
-import android.media.MediaCodec
-import android.media.MediaExtractor
-import android.media.MediaFormat
+import android.media.*
 import android.os.Build
 import android.util.Log
-import android.view.Surface
 import androidx.annotation.RequiresApi
+import com.xiaolanger.video.extension.getInt
 
-@RequiresApi(Build.VERSION_CODES.JELLY_BEAN)
-class SimpleDecoder(private val context: Context, private val surface: Surface) : Runnable {
-    private val TAG = "SimpleDecoder"
+class SimpleAudioDecoder(private val context: Context) : Runnable {
+    companion object {
+        private const val TAG = "SimpleAudioDecoder"
+    }
 
     private lateinit var extractor: MediaExtractor
     private lateinit var codec: MediaCodec
+    private lateinit var audioTrack: AudioTrack
+    private var buffer: ShortArray? = null
 
     @RequiresApi(Build.VERSION_CODES.N)
     override fun run() {
@@ -23,16 +24,47 @@ class SimpleDecoder(private val context: Context, private val surface: Surface) 
         extractor.setDataSource(context.assets.openFd("test.mp4"))
 
         // select track
-        var track = getTrackFormat("video/")
+        var track = getTrackFormat("audio/")
         var format = extractor.getTrackFormat(track);
         extractor.selectTrack(track)
-        Log.d(TAG, "track = $track, format = ${format.toString()}")
+        Log.d(TAG, "track = $track, format = $format")
+
+        // config audio track
+        // audio attr
+        var audioAttr = AudioAttributes.Builder()
+            .setLegacyStreamType(AudioManager.STREAM_MUSIC)
+            .build()
+        // audio format
+        var rate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+        var chanelMask = when (format.getInt(MediaFormat.KEY_CHANNEL_COUNT, 0)) {
+            1 -> AudioFormat.CHANNEL_OUT_MONO
+            2 -> AudioFormat.CHANNEL_OUT_STEREO
+            else -> throw Exception("unknown error")
+        }
+        var encoding = format.getInt(MediaFormat.KEY_PCM_ENCODING, AudioFormat.ENCODING_PCM_16BIT)
+        var audioFormat = AudioFormat.Builder()
+            .setSampleRate(rate)
+            .setChannelMask(chanelMask)
+            .setEncoding(encoding)
+            .build()
+
+        var bufferSize = AudioTrack.getMinBufferSize(rate, chanelMask, encoding)
+        Log.d(TAG, "bufferSize = $bufferSize")
+
+        audioTrack = AudioTrack(
+            audioAttr,
+            audioFormat,
+            bufferSize,
+            AudioTrack.MODE_STREAM,
+            AudioManager.AUDIO_SESSION_ID_GENERATE
+        )
+        audioTrack.play()
 
         // config codec
         codec = MediaCodec.createDecoderByType(
             format.getString(MediaFormat.KEY_MIME)
         )
-        codec.configure(format, surface, null, 0)
+        codec.configure(format, null, null, 0)
         codec.start()
 
         while (true) {
@@ -86,8 +118,13 @@ class SimpleDecoder(private val context: Context, private val surface: Surface) 
                     Log.d(
                         TAG,
                         "output size = ${output?.asCharBuffer()?.length}"
-                    );
-                    codec.releaseOutputBuffer(outputIndex, false)
+                    )
+                    if (buffer?.size ?: 0 < bufferInfo.size / 2) {
+                        buffer = ShortArray(bufferInfo.size / 2)
+                    }
+                    output?.asShortBuffer()?.get(buffer, 0, bufferInfo.size / 2)
+                    buffer?.let { audioTrack.write(it, 0, bufferInfo.size / 2) }
+                    codec.releaseOutputBuffer(outputIndex, true)
                 }
             }
 
@@ -101,8 +138,10 @@ class SimpleDecoder(private val context: Context, private val surface: Surface) 
         extractor.release()
         codec.stop()
         codec.release()
+        audioTrack.release()
     }
 
+    @RequiresApi(Build.VERSION_CODES.JELLY_BEAN)
     private fun getTrackFormat(type: String): Int {
         for (i in 0 until extractor.trackCount) {
             val format = extractor.getTrackFormat(i)

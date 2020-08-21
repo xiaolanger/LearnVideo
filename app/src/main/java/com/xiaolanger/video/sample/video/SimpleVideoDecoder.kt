@@ -6,17 +6,22 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.os.Build
 import android.util.Log
-import android.view.Surface
+import android.view.SurfaceHolder
 import androidx.annotation.RequiresApi
 
 @RequiresApi(Build.VERSION_CODES.JELLY_BEAN)
-class SimpleVideoDecoder(private val context: Context, private val surface: Surface) : Runnable {
+class SimpleVideoDecoder(
+    private val context: Context,
+    private val holder: SurfaceHolder,
+    private val callback: (width: Int, height: Int) -> Unit
+) : Runnable {
     companion object {
         private const val TAG = "SimpleVideoDecoder"
     }
 
     private lateinit var extractor: MediaExtractor
     private lateinit var codec: MediaCodec
+    private var firstRenderTime = 0L
 
     @RequiresApi(Build.VERSION_CODES.N)
     override fun run() {
@@ -30,13 +35,19 @@ class SimpleVideoDecoder(private val context: Context, private val surface: Surf
         extractor.selectTrack(track)
         Log.d(Companion.TAG, "track = $track, format = $format")
 
+        callback.invoke(
+            format.getInteger(MediaFormat.KEY_WIDTH),
+            format.getInteger(MediaFormat.KEY_HEIGHT)
+        )
+
         // config codec
         codec = MediaCodec.createDecoderByType(
             format.getString(MediaFormat.KEY_MIME)
         )
-        codec.configure(format, surface, null, 0)
+        codec.configure(format, holder.surface, null, 0)
         codec.start()
 
+        var start = System.currentTimeMillis();
         while (true) {
             Log.d(Companion.TAG, "before input dequeue")
             var inputIndex = codec.dequeueInputBuffer(200000)
@@ -89,6 +100,20 @@ class SimpleVideoDecoder(private val context: Context, private val surface: Surf
                         Companion.TAG,
                         "output size = ${output?.asCharBuffer()?.length}"
                     )
+
+                    // sync
+                    if (firstRenderTime == 0L) {
+                        firstRenderTime = System.currentTimeMillis()
+                    }
+                    var realTime = System.currentTimeMillis() - firstRenderTime
+                    var presentationTime = bufferInfo.presentationTimeUs / 1000
+                    if (realTime < presentationTime) {
+                        var sleepTime = presentationTime - realTime
+                        Log.d(TAG, "video sleep = $sleepTime")
+                        Thread.sleep(sleepTime)
+                    }
+
+                    // render
                     codec.releaseOutputBuffer(outputIndex, true)
                 }
             }
@@ -98,6 +123,7 @@ class SimpleVideoDecoder(private val context: Context, private val surface: Surf
                 break
             }
         }
+        Log.d(TAG, "video totalTime = ${System.currentTimeMillis() - start}")
 
         // release
         extractor.release()

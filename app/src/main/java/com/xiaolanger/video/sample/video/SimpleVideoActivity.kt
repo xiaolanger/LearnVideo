@@ -10,11 +10,12 @@ import com.xiaolanger.video.R
 import java.util.concurrent.Executors
 
 class SimpleVideoActivity : Activity() {
+    private val executor = Executors.newFixedThreadPool(2)
+
     @RequiresApi(Build.VERSION_CODES.JELLY_BEAN)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_video)
-        Executors.newFixedThreadPool(1).execute(SimpleAudioDecoder(this))
 
         var surfaceView: SurfaceView = findViewById(R.id.surface)
         surfaceView.holder.addCallback(object : SurfaceHolder.Callback2 {
@@ -28,9 +29,27 @@ class SimpleVideoActivity : Activity() {
             }
 
             override fun surfaceCreated(p0: SurfaceHolder?) {
-//                var surface = p0?.surface
-//                Executors.newFixedThreadPool(1)
-//                    .execute(SimpleVideoDecoder(this@SimpleVideoActivity, surface!!))
+                executor.execute(
+                    SimpleVideoDecoder(
+                        this@SimpleVideoActivity,
+                        p0!!
+                    ) { width, height ->
+                        surfaceView.post {
+                            var w = resources.displayMetrics.widthPixels
+                            var h = resources.displayMetrics.heightPixels
+
+                            if (width > height) {
+                                surfaceView.layoutParams.width = w
+                                surfaceView.layoutParams.height = height * w / width
+                            } else {
+                                surfaceView.layoutParams.height = h
+                                surfaceView.layoutParams.width = width * h / height
+                            }
+
+                            surfaceView.layoutParams = surfaceView.layoutParams
+                        }
+                    })
+                executor.execute(SimpleAudioDecoder(this@SimpleVideoActivity))
             }
         })
     }

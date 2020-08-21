@@ -16,6 +16,7 @@ class SimpleAudioDecoder(private val context: Context) : Runnable {
     private lateinit var codec: MediaCodec
     private lateinit var audioTrack: AudioTrack
     private var buffer: ShortArray? = null
+    private var firstRenderTime = 0L
 
     @RequiresApi(Build.VERSION_CODES.N)
     override fun run() {
@@ -67,6 +68,7 @@ class SimpleAudioDecoder(private val context: Context) : Runnable {
         codec.configure(format, null, null, 0)
         codec.start()
 
+        var start = System.currentTimeMillis()
         while (true) {
             Log.d(TAG, "before input dequeue")
             var inputIndex = codec.dequeueInputBuffer(200000)
@@ -119,6 +121,20 @@ class SimpleAudioDecoder(private val context: Context) : Runnable {
                         TAG,
                         "output size = ${output?.asCharBuffer()?.length}"
                     )
+
+                    // sync
+                    if (firstRenderTime == 0L) {
+                        firstRenderTime = System.currentTimeMillis()
+                    }
+                    var realTime = System.currentTimeMillis() - firstRenderTime
+                    var presentationTime = bufferInfo.presentationTimeUs / 1000
+                    if (realTime < presentationTime) {
+                        var sleepTime = presentationTime - realTime
+                        Log.d(TAG, "audio sleep = $sleepTime")
+                        Thread.sleep(sleepTime)
+                    }
+
+                    // render
                     if (buffer?.size ?: 0 < bufferInfo.size / 2) {
                         buffer = ShortArray(bufferInfo.size / 2)
                     }
@@ -133,6 +149,8 @@ class SimpleAudioDecoder(private val context: Context) : Runnable {
                 break
             }
         }
+
+        Log.d(TAG, "audio totalTime = ${System.currentTimeMillis() - start}")
 
         // release
         extractor.release()

@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
 import android.opengl.GLUtils;
+import android.util.Log;
 
 import com.xiaolanger.video.R;
 
@@ -21,18 +22,14 @@ import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 
 public class SimpleRender implements GLSurfaceView.Renderer {
+    private static final String TAG = "SimpleRender";
+
     private Context context;
     private Bitmap mBitmap;
-    // program
-    private int mProgram;
-    // texture id
-//    private int mTextureId;
-    // vertex coord
-    private int mVertexCoordHandle;
-    // fragment coord
-    private int mFragmentCoordHandle;
-    // fragment texture
-    private int mFragmentTextureHandle;
+
+    private int program;
+    private int vertex;
+    private int fragment;
 
     public SimpleRender(Context context) {
         this.context = context;
@@ -57,10 +54,6 @@ public class SimpleRender implements GLSurfaceView.Renderer {
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
         GLES20.glClearColor(0, 0, 0, 0);
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
-
-//        int[] textures = new int[1];
-//        GLES20.glGenTextures(1, textures, 0);
-//        mTextureId = textures[0];
     }
 
     @Override
@@ -70,44 +63,42 @@ public class SimpleRender implements GLSurfaceView.Renderer {
 
     @Override
     public void onDrawFrame(GL10 gl) {
-        int program = GLES20.glCreateProgram();
-        // 绑定shader
+        Log.d(TAG, "onDrawFrame");
+
+        // init program
+        program = GLES20.glCreateProgram();
+
+        // init shader
         GLES20.glAttachShader(program, loadShader(GLES20.GL_VERTEX_SHADER, "vertex.glsl"));
         GLES20.glAttachShader(program, loadShader(GLES20.GL_FRAGMENT_SHADER, "fragment.glsl"));
-        // link & use
         GLES20.glLinkProgram(program);
+
+        // init vertex
+        vertex = GLES20.glGetAttribLocation(program, "vertexCoord");
+        fragment = GLES20.glGetAttribLocation(program, "fragmentCoord");
+
         GLES20.glUseProgram(program);
-        mProgram = program;
 
-        mVertexCoordHandle = GLES20.glGetAttribLocation(program, "vertexCoord");
-        mFragmentCoordHandle = GLES20.glGetAttribLocation(program, "fragmentCoord");
-        mFragmentTextureHandle = GLES20.glGetUniformLocation(program, "texture");
-
-        GLES20.glEnableVertexAttribArray(mVertexCoordHandle);
-        GLES20.glEnableVertexAttribArray(mFragmentCoordHandle);
-        GLES20.glVertexAttribPointer(mVertexCoordHandle, 2, GLES20.GL_FLOAT, false, 0, getBufferFromArray(vertexCoord));
-        GLES20.glVertexAttribPointer(mFragmentCoordHandle, 2, GLES20.GL_FLOAT, false, 0, getBufferFromArray(fragmentCoord));
-
-        // 纹理
-//        GLES20.glActiveTexture(GLES20.GL_TEXTURE15);
-//        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, mTextureId);
-//        GLES20.glUniform1i(mFragmentTextureHandle, 15);
-        //配置边缘过渡参数
+        // init texture param
         GLES20.glTexParameterf(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR);
         GLES20.glTexParameterf(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
         GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);
         GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE);
+
+        // feed data
+        GLES20.glEnableVertexAttribArray(vertex);
+        GLES20.glEnableVertexAttribArray(fragment);
+        GLES20.glVertexAttribPointer(vertex, 2, GLES20.GL_FLOAT, false, 0, getBufferFromArray(vertexCoord));
+        GLES20.glVertexAttribPointer(fragment, 2, GLES20.GL_FLOAT, false, 0, getBufferFromArray(fragmentCoord));
         GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, mBitmap, 0);
 
+        // draw
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
-    }
 
-    public void onDestroy() {
-        GLES20.glDisableVertexAttribArray(mVertexCoordHandle);
-        GLES20.glDisableVertexAttribArray(mFragmentCoordHandle);
-        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
-//        GLES20.glDeleteTextures(1, new int[]{mTextureId}, 0);
-        GLES20.glDeleteProgram(mProgram);
+        // release
+        GLES20.glDisableVertexAttribArray(vertex);
+        GLES20.glDisableVertexAttribArray(fragment);
+        GLES20.glDeleteProgram(program);
     }
 
     ///////////////////工具类/////////////////////

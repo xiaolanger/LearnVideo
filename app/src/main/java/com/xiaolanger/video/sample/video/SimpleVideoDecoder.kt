@@ -6,13 +6,13 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.os.Build
 import android.util.Log
-import android.view.SurfaceHolder
+import android.view.Surface
 import androidx.annotation.RequiresApi
 
 @RequiresApi(Build.VERSION_CODES.JELLY_BEAN)
 class SimpleVideoDecoder(
     private val context: Context,
-    private val holder: SurfaceHolder,
+    private val surface: Surface,
     private val callback: (width: Int, height: Int) -> Unit
 ) : Runnable {
     companion object {
@@ -44,7 +44,7 @@ class SimpleVideoDecoder(
         codec = MediaCodec.createDecoderByType(
             format.getString(MediaFormat.KEY_MIME)
         )
-        codec.configure(format, holder.surface, null, 0)
+        codec.configure(format, surface, null, 0)
         codec.start()
 
         var start = System.currentTimeMillis();

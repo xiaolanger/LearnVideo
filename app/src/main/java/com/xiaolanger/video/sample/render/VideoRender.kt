@@ -5,13 +5,19 @@ import android.graphics.SurfaceTexture
 import android.opengl.GLES11Ext
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
+import android.util.Log
 import com.xiaolanger.video.extension.getAssetContent
+import com.xiaolanger.video.extension.orthoM
 import com.xiaolanger.video.extension.toFloatBuffer
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 
 class VideoRender(private val context: Context, private val callback: (SurfaceTexture) -> Unit) :
     GLSurfaceView.Renderer {
+    companion object {
+        const val TAG = "VideoRender"
+    }
+
     private var vertexCoord = floatArrayOf(
         -1f, 1f,
         -1f, -1f,
@@ -24,8 +30,16 @@ class VideoRender(private val context: Context, private val callback: (SurfaceTe
         1f, 1f,
         1f, 0f
     )
-    private var textureId: Int = 0
+    private var textureId = 0
     private lateinit var surfaceTexture: SurfaceTexture
+    private var program = 0
+
+    var oldWidth: Int = 0
+        @Synchronized set
+        @Synchronized get
+    var oldHeight: Int = 0
+        @Synchronized set
+        @Synchronized get
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         GLES20.glClearColor(0f, 0f, 0f, 0f)
@@ -39,7 +53,7 @@ class VideoRender(private val context: Context, private val callback: (SurfaceTe
         callback.invoke(surfaceTexture)
 
         // init program
-        var program = GLES20.glCreateProgram()
+        program = GLES20.glCreateProgram()
 
         // init shader
         GLES20.glAttachShader(program, loadShader(GLES20.GL_VERTEX_SHADER, "vertex_video.glsl"))
@@ -100,6 +114,23 @@ class VideoRender(private val context: Context, private val callback: (SurfaceTe
     }
 
     override fun onDrawFrame(gl: GL10?) {
+        if (oldWidth != 0 && oldHeight != 0) {
+            var m = FloatArray(16)
+
+            context.orthoM(m, oldWidth, oldHeight)
+
+            var matrix = GLES20.glGetUniformLocation(program, "matrix")
+            GLES20.glUniformMatrix4fv(matrix, 1, false, m, 0)
+
+            Log.d(TAG, m.joinToString {
+                it.toString()
+            })
+
+            // reset
+            oldWidth = 0
+            oldHeight = 0
+        }
+
         surfaceTexture.updateTexImage()
 
         // draw
